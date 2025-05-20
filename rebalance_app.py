@@ -53,12 +53,18 @@ st.markdown("""
 st.title("📊 Pierre's Portfolio Rebalancer")
 
 # === Load most recent file ===
-downloads_folder = os.path.expanduser("~/Downloads")
-excel_files = glob.glob(os.path.join(downloads_folder, "*.xlsx"))
-if not excel_files:
-    st.error("No Excel files found in Downloads.")
+# === Upload Excel file ===
+uploaded_file = st.file_uploader("📤 Upload Excel File", type=["xlsx"])
+
+if uploaded_file is None:
+    st.warning("Please upload an Excel file to continue.")
     st.stop()
-latest_file = max(excel_files, key=os.path.getctime)
+
+# Save temporarily for processing
+with open("uploaded_file.xlsx", "wb") as f:
+    f.write(uploaded_file.read())
+latest_file = "uploaded_file.xlsx"
+
 
 # === Extract client name from A3 ===
 wb = openpyxl.load_workbook(latest_file)
