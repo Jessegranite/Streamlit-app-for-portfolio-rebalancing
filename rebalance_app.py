@@ -181,7 +181,7 @@ with col2:
     plot_pie(grouped["Target %"], grouped["Asset Class"], "Target")
 
 # === Download file ===
-output_path = os.path.join(downloads_folder, "rebalancing_plan.xlsx")
+output_path = "rebalancing_plan.xlsx"
 grouped.to_excel(output_path, index=False)
 with open(output_path, "rb") as f:
     st.download_button("⬇️ Download Excel", f, file_name="rebalancing_plan.xlsx")
