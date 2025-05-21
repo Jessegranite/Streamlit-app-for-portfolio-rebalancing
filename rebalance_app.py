@@ -100,46 +100,6 @@ st.subheader("🎯 Asset Class Allocation Targets")
 # Line under the section title
 st.markdown("<hr style='border: 1px solid #000;'>", unsafe_allow_html=True)
 
-# Custom toggle styling
-st.markdown("""
-    <style>
-    .stToggle [data-testid="stTickbox"] label {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: 500;
-    }
-    .stToggle [data-testid="stTickbox"] input[type="checkbox"] + div::before {
-        content: '';
-        display: inline-block;
-        width: 36px;
-        height: 20px;
-        background-color: #ccc;
-        border-radius: 10px;
-        position: relative;
-        transition: background-color 0.3s;
-    }
-    .stToggle [data-testid="stTickbox"] input[type="checkbox"] + div::after {
-        content: '';
-        display: inline-block;
-        width: 16px;
-        height: 16px;
-        background-color: white;
-        border-radius: 50%;
-        position: absolute;
-        left: 2px;
-        top: 2px;
-        transition: left 0.3s;
-    }
-    .stToggle [data-testid="stTickbox"] input[type="checkbox"]:checked + div::before {
-        background-color: #4CAF50;
-    }
-    .stToggle [data-testid="stTickbox"] input[type="checkbox"]:checked + div::after {
-        left: 18px;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 methods, inputs, locks = {}, {}, {}
 
 for asset in desired_order:
