@@ -1,3 +1,4 @@
+[FULLY CLEANED & UPDATED SCRIPT]
 
 import pandas as pd
 import os
@@ -102,7 +103,7 @@ for asset in desired_order:
     current_val = current.values[0] if not current.empty else 0
     method_init = methods.get(asset, "%")
     if method_init == "%":
-        default_val = row["Current %"]
+                default_val = grouped[grouped["Asset Class"] == asset]["Current %"].values[0] if not grouped[grouped["Asset Class"] == asset].empty else 0
     elif method_init == "$":
         default_val = current_val
     else:
