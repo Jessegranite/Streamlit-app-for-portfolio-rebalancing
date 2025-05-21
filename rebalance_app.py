@@ -98,7 +98,15 @@ for asset in desired_order:
     with col2:
         methods[asset] = st.selectbox("", ["%", "$", "$ Δ"], key=f"method_{asset}")
     with col3:
-        inputs[asset] = st.number_input("", step=100.0 if methods[asset] != "%" else 0.1, key=f"val_{asset}")
+        method_init = methods.get(asset, "%")
+    current_val = row["Current $"]
+    if method_init == "%":
+        default_val = row["Current %"]
+    elif method_init == "$":
+        default_val = current_val
+    else:
+        default_val = 0.0
+    inputs[asset] = st.number_input("", value=default_val, step=100.0 if method_init != "%" else 0.1, key=f"val_{asset}")
     with col4:
         locks[asset] = st.toggle("Lock", value=False, key=f"lock_{asset}")
 
@@ -113,7 +121,15 @@ for asset in desired_order:
             with cols[1]:
                 sec_methods[key] = st.selectbox("", ["%", "$", "$ Δ"], key=f"smethod_{key}")
             with cols[2]:
-                sec_inputs[key] = st.number_input("", step=100.0 if sec_methods[key] != "%" else 0.1, key=f"sval_{key}")
+                method_init = sec_methods.get(key, "%")
+                current_val = row["Market Value (CAD)"]
+                if method_init == "%":
+                    default_val = row["Current %"] * 100  # show as percent
+                elif method_init == "$":
+                    default_val = current_val
+                else:
+                    default_val = 0.0
+                sec_inputs[key] = st.number_input("", value=default_val, step=100.0 if method_init != "%" else 0.1, key=f"sval_{key}")
             with cols[3]:
                 sec_locks[key] = st.toggle("Lock", value=False, key=f"slock_{key}")
 
