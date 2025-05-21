@@ -53,18 +53,12 @@ st.markdown("""
 st.title("📊 Pierre's Portfolio Rebalancer")
 
 # === Load most recent file ===
-# === Upload Excel file ===
-uploaded_file = st.file_uploader("📤 Upload Excel File", type=["xlsx"])
-
-if uploaded_file is None:
-    st.warning("Please upload an Excel file to continue.")
+downloads_folder = os.path.expanduser("~/Downloads")
+excel_files = glob.glob(os.path.join(downloads_folder, "*.xlsx"))
+if not excel_files:
+    st.error("No Excel files found in Downloads.")
     st.stop()
-
-# Save temporarily for processing
-with open("uploaded_file.xlsx", "wb") as f:
-    f.write(uploaded_file.read())
-latest_file = "uploaded_file.xlsx"
-
+latest_file = max(excel_files, key=os.path.getctime)
 
 # === Extract client name from A3 ===
 wb = openpyxl.load_workbook(latest_file)
@@ -181,7 +175,7 @@ with col2:
     plot_pie(grouped["Target %"], grouped["Asset Class"], "Target")
 
 # === Download file ===
-output_path = "rebalancing_plan.xlsx"
+output_path = os.path.join(downloads_folder, "rebalancing_plan.xlsx")
 grouped.to_excel(output_path, index=False)
 with open(output_path, "rb") as f:
     st.download_button("⬇️ Download Excel", f, file_name="rebalancing_plan.xlsx")
