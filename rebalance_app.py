@@ -297,8 +297,8 @@ with col2:
     for _, row in sells.iterrows():
         st.markdown(f"• **{row['Asset Class']}**: ${abs(row['Buy/Sell $']):,.2f}")
 
-sec_buys = security_result_df[security_result_df["Buy/Sell $"] > 0]
-sec_sells = security_result_df[security_result_df["Buy/Sell $"] < 0]
+sec_buys = security_result_df[(security_result_df["Buy/Sell $"] > 10)]
+sec_sells = security_result_df[(security_result_df["Buy/Sell $"] < -10)]
 col1, col2 = st.columns(2)
 with col1:
     st.markdown("### 🟢 Buy (Securities)")
