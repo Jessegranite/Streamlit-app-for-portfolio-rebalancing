@@ -1,3 +1,5 @@
+[FULLY CLEANED & UPDATED SCRIPT]
+
 import pandas as pd
 import os
 import glob
@@ -36,15 +38,15 @@ st.markdown("""
 
 st.title("📊 Pierre's Portfolio Rebalancer")
 
-# === Load most recent file ===
-downloads_folder = os.path.expanduser("~/Downloads")
-excel_files = glob.glob(os.path.join(downloads_folder, "*.xlsx"))
-if not excel_files:
-    st.error("No Excel files found in Downloads.")
+# === File uploader ===
+uploaded_file = st.file_uploader("Upload an Excel file", type=[".xlsx"])
+if uploaded_file is None:
     st.stop()
-latest_file = max(excel_files, key=os.path.getctime)
 
 # === Extract client name from A3 ===
+wb = openpyxl.load_workbook(uploaded_file)
+ws = wb.active
+client_name = ws["A3"].value or "Client"
 wb = openpyxl.load_workbook(latest_file)
 ws = wb.active
 client_name = ws["A3"].value or "Client"
@@ -56,7 +58,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # === Load and clean data ===
-df = pd.read_excel(latest_file)
+df = pd.read_excel(uploaded_file)
 df.drop(df.columns[0], axis=1, inplace=True)
 df.rename(columns={
     df.columns[0]: "Asset Class",
@@ -243,9 +245,8 @@ with col2:
         st.markdown(f"• **{row['Security Name']} ({row['Asset Class']})**: ${abs(row['Buy/Sell $']):,.2f}")
 
 # === Download File ===
-output_path = os.path.join(downloads_folder, "rebalancing_plan.xlsx")
-with pd.ExcelWriter(output_path) as writer:
+with pd.ExcelWriter("rebalancing_plan.xlsx") as writer:
     grouped.to_excel(writer, sheet_name="Asset Class", index=False)
     security_result_df.to_excel(writer, sheet_name="Securities", index=False)
-with open(output_path, "rb") as f:
+with open("rebalancing_plan.xlsx", "rb") as f:
     st.download_button("⬇️ Download Excel", f, file_name="rebalancing_plan.xlsx")
