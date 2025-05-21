@@ -1,3 +1,4 @@
+[FULLY CLEANED & UPDATED SCRIPT]
 
 import pandas as pd
 import os
@@ -92,7 +93,7 @@ for asset in desired_order:
     if asset not in grouped["Asset Class"].values:
         continue
 
-    col1, col2, col3, col4 = st.columns([2.5, 1.5, 2.5, 1])
+    col1, col2, col3, col4 = st.columns([3, 1.5, 3, 1])
     with col1:
         st.markdown(f"<div class='block-label'>{asset}</div>", unsafe_allow_html=True)
     with col2:
@@ -107,7 +108,8 @@ for asset in desired_order:
         default_val = current_val
     else:
         default_val = 0.0
-    inputs[asset] = st.number_input("", value=default_val, step=100.0 if method_init != "%" else 0.1, key=f"val_{asset}")
+    with col3:
+        inputs[asset] = st.number_input("", value=default_val, step=100.0 if method_init != "%" else 0.1, key=f"val_{asset}")
     with col4:
         locks[asset] = st.toggle("Lock", value=False, key=f"lock_{asset}")
 
