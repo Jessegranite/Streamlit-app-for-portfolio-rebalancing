@@ -46,7 +46,7 @@ if uploaded_file is None:
 wb = openpyxl.load_workbook(uploaded_file)
 ws = wb.active
 client_name = ws["A3"].value or "Client"
-wb = openpyxl.load_workbook(latest_file)
+
 ws = wb.active
 client_name = ws["A3"].value or "Client"
 st.markdown(f"""
