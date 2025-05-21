@@ -92,66 +92,90 @@ security_df = df.groupby(["Asset Class", "Security Name"])["Market Value (CAD)"]
 security_df["Class Total"] = security_df.groupby("Asset Class")["Market Value (CAD)"].transform("sum")
 security_df["Current %"] = security_df["Market Value (CAD)"] / security_df["Class Total"]
 
+...
+
 # === Asset Class Input UI ===
 sec_methods, sec_inputs, sec_locks = {}, {}, {}
 st.subheader("🎯 Asset Class Allocation Targets")
 methods, inputs, locks = {}, {}, {}
 
+st.markdown("""
+    <style>
+        .asset-class-container {
+            background-color: #f0ede9;
+            border: 1px solid #c7c1b8;
+            border-radius: 12px;
+            padding: 1.2rem;
+            margin-bottom: 1rem;
+        }
+        .asset-class-header {
+            font-weight: 700;
+            font-size: 1.25rem;
+            color: #3e3c3d;
+            margin-bottom: 0.75rem;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 for asset in desired_order:
     if asset not in grouped["Asset Class"].values:
         continue
 
-    st.markdown("""<hr style='border:1px solid #aaa;margin:1rem 0;'>""", unsafe_allow_html=True)
-    st.markdown(f"**{asset}**", unsafe_allow_html=True)
-    row = grouped[grouped['Asset Class'] == asset]
-    current_val = row["Current $"].values[0] if not row.empty else 0
-    method_init = methods.get(asset, "%")
+    with st.container():
+        st.markdown("""<div class='asset-class-container'>""", unsafe_allow_html=True)
 
-    cols = st.columns([2.5, 3.5, 1.2, 1])
-    with cols[0]:
-        methods[asset] = st.selectbox("Method", ["%", "$", "$ Δ"], key=f"method_{asset}")
-    with cols[1]:
-        if methods[asset] == "%":
-            default_val = row["Current %"].values[0] if not row.empty else 0
-        elif methods[asset] == "$":
-            default_val = current_val
-        else:
-            default_val = 0.0
-        inputs[asset] = st.number_input("Target", value=default_val, step=100.0 if methods[asset] != "%" else 0.1, key=f"val_{asset}")
-    with cols[2]:
-        locks[asset] = st.toggle("Lock", value=False, key=f"lock_{asset}")
+        st.markdown(f"<div class='asset-class-header'>{asset}</div>", unsafe_allow_html=True)
+        row = grouped[grouped['Asset Class'] == asset]
+        current_val = row["Current $"] .values[0] if not row.empty else 0
 
-    asset_securities = security_df[security_df["Asset Class"] == asset]
-    with st.expander(f"🔽 Set Targets for Securities in {asset}"):
-        st.markdown("""
-            <style>
-                [data-testid='stExpander'] > div > div {
-                    background-color: #f8f5f0;
-                    padding: 1rem;
-                    border-radius: 10px;
-                }
-            </style>
-        """, unsafe_allow_html=True)
-        for _, row in asset_securities.iterrows():
-            sec = row["Security Name"]
-            key = f"{asset}_{sec}"
-            cols = st.columns([3, 1.5, 2.5, 1])
-            with cols[0]:
-                st.markdown(f"{sec} @ {row['Current %']:.2%}")
-            with cols[1]:
-                sec_methods[key] = st.selectbox("", ["%", "$", "$ Δ"], key=f"smethod_{key}")
-            with cols[2]:
-                method_init = sec_methods.get(key, "%")
-                current_val = row["Market Value (CAD)"]
-                if method_init == "%":
-                    default_val = row["Current %"] * 100
-                elif method_init == "$":
-                    default_val = current_val
-                else:
-                    default_val = 0.0
-                sec_inputs[key] = st.number_input("", value=default_val, step=100.0 if method_init != "%" else 0.1, key=f"sval_{key}")
-            with cols[3]:
-                sec_locks[key] = st.toggle("Lock", value=False, key=f"slock_{key}")
+        cols = st.columns([2.5, 3.5, 1.2, 1])
+        with cols[0]:
+            methods[asset] = st.selectbox("Method", ["%", "$", "$ ∆"], key=f"method_{asset}")
+        with cols[1]:
+            if methods[asset] == "%":
+                default_val = row["Current %"].values[0] if not row.empty else 0
+            elif methods[asset] == "$":
+                default_val = current_val
+            else:
+                default_val = 0.0
+            inputs[asset] = st.number_input("Target", value=default_val, step=100.0 if methods[asset] != "%" else 0.1, key=f"val_{asset}")
+        with cols[2]:
+            locks[asset] = st.toggle("Lock", value=False, key=f"lock_{asset}")
+
+        asset_securities = security_df[security_df["Asset Class"] == asset]
+        with st.expander(f"🔽 Set Targets for Securities in {asset}"):
+            st.markdown("""
+                <style>
+                    [data-testid='stExpander'] > div > div {
+                        background-color: #f8f5f0;
+                        padding: 1rem;
+                        border-radius: 10px;
+                    }
+                </style>
+            """, unsafe_allow_html=True)
+            for _, row in asset_securities.iterrows():
+                sec = row["Security Name"]
+                key = f"{asset}_{sec}"
+                cols = st.columns([3, 1.5, 2.5, 1])
+                with cols[0]:
+                    st.markdown(f"{sec} @ {row['Current %']:.2%}")
+                with cols[1]:
+                    sec_methods[key] = st.selectbox("", ["%", "$", "$ ∆"], key=f"smethod_{key}")
+                with cols[2]:
+                    method_init = sec_methods.get(key, "%")
+                    current_val = row["Market Value (CAD)"]
+                    if method_init == "%":
+                        default_val = row["Current %"] * 100
+                    elif method_init == "$":
+                        default_val = current_val
+                    else:
+                        default_val = 0.0
+                    sec_inputs[key] = st.number_input("", value=default_val, step=100.0 if method_init != "%" else 0.1, key=f"sval_{key}")
+                with cols[3]:
+                    sec_locks[key] = st.toggle("Lock", value=False, key=f"slock_{key}")
+
+        st.markdown("""</div>""", unsafe_allow_html=True)
+
 
 # === Rebalancing logic ===
 target_dollars, locked_assets, unlocked_assets = {}, [], []
