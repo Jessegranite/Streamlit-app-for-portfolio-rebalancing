@@ -98,8 +98,9 @@ for asset in desired_order:
     with col2:
         methods[asset] = st.selectbox("", ["%", "$", "$ Δ"], key=f"method_{asset}")
     with col3:
-        method_init = methods.get(asset, "%")
-    current_val = row["Current $"]
+        current = grouped[grouped['Asset Class'] == asset]["Current $"]
+    current_val = current.values[0] if not current.empty else 0
+    method_init = methods.get(asset, "%")
     if method_init == "%":
         default_val = row["Current %"]
     elif method_init == "$":
