@@ -1,5 +1,4 @@
 
-
 import pandas as pd
 import os
 import glob
@@ -33,7 +32,10 @@ st.markdown("""
             padding: 0.25rem 0;
             text-align: center;
         }
-    </style>
+        .st-expanderContent {
+        background-color: #f8f5f0 !important;
+    }
+</style>
 """, unsafe_allow_html=True)
 
 st.title("📊 Pierre's Portfolio Rebalancer")
@@ -52,10 +54,12 @@ ws = wb.active
 client_name = ws["A3"].value or "Client"
 st.markdown(f"""
     <div style='background-color: #eae6e1; padding: 1rem; border-radius: 10px; text-align: center;
-    font-size: 1.6rem; font-weight: bold; color: #3e3c3d; border: 1px solid #ccc; margin-top: 1rem; margin-bottom: 1.5rem;'>
+    font-size: 1.6rem; font-weight: bold; color: #3e3c3d; border: 1px solid #ccc; margin-top: 1rem; margin-bottom: 0.5rem;'>
         👤 {client_name}
     </div>
 """, unsafe_allow_html=True)
+
+
 
 # === Load and clean data ===
 df = pd.read_excel(uploaded_file)
@@ -77,6 +81,10 @@ desired_order = ["Cash & Cash Equivalents", "Bonds", "Canadian Equity", "Global 
 grouped = df.groupby("Asset Class")["Market Value (CAD)"].sum().reset_index()
 grouped.columns = ["Asset Class", "Current $"]
 total_value = grouped["Current $"].sum()
+st.markdown(f"<div style='text-align:center; font-size:1.1rem; color:#5a5959; margin-bottom:1.5rem;'>Total Portfolio Value: <strong>${total_value:,.2f}</strong></div>", unsafe_allow_html=True)
+grouped = df.groupby("Asset Class")["Market Value (CAD)"].sum().reset_index()
+grouped.columns = ["Asset Class", "Current $"]
+total_value = grouped["Current $"].sum()
 grouped["Current %"] = grouped["Current $"] / total_value * 100
 
 # === Security-level grouping ===
@@ -93,28 +101,37 @@ for asset in desired_order:
     if asset not in grouped["Asset Class"].values:
         continue
 
-    col1, col2, col3, col4 = st.columns([3, 1.5, 3, 1])
-    with col1:
-        st.markdown(f"<div class='block-label'>{asset}</div>", unsafe_allow_html=True)
-    with col2:
-        methods[asset] = st.selectbox("", ["%", "$", "$ Δ"], key=f"method_{asset}")
-    with col3:
-        current = grouped[grouped['Asset Class'] == asset]["Current $"]
-    current_val = current.values[0] if not current.empty else 0
+    st.markdown("""<hr style='border:1px solid #aaa;margin:1rem 0;'>""", unsafe_allow_html=True)
+    st.markdown(f"**{asset}**", unsafe_allow_html=True)
+    row = grouped[grouped['Asset Class'] == asset]
+    current_val = row["Current $"].values[0] if not row.empty else 0
     method_init = methods.get(asset, "%")
-    if method_init == "%":
-                default_val = grouped[grouped["Asset Class"] == asset]["Current %"].values[0] if not grouped[grouped["Asset Class"] == asset].empty else 0
-    elif method_init == "$":
-        default_val = current_val
-    else:
-        default_val = 0.0
-    with col3:
-        inputs[asset] = st.number_input("", value=default_val, step=100.0 if method_init != "%" else 0.1, key=f"val_{asset}")
-    with col4:
+
+    cols = st.columns([2.5, 3.5, 1.2, 1])
+    with cols[0]:
+        methods[asset] = st.selectbox("Method", ["%", "$", "$ Δ"], key=f"method_{asset}")
+    with cols[1]:
+        if methods[asset] == "%":
+            default_val = row["Current %"].values[0] if not row.empty else 0
+        elif methods[asset] == "$":
+            default_val = current_val
+        else:
+            default_val = 0.0
+        inputs[asset] = st.number_input("Target", value=default_val, step=100.0 if methods[asset] != "%" else 0.1, key=f"val_{asset}")
+    with cols[2]:
         locks[asset] = st.toggle("Lock", value=False, key=f"lock_{asset}")
 
     asset_securities = security_df[security_df["Asset Class"] == asset]
     with st.expander(f"🔽 Set Targets for Securities in {asset}"):
+        st.markdown("""
+            <style>
+                [data-testid='stExpander'] > div > div {
+                    background-color: #f8f5f0;
+                    padding: 1rem;
+                    border-radius: 10px;
+                }
+            </style>
+        """, unsafe_allow_html=True)
         for _, row in asset_securities.iterrows():
             sec = row["Security Name"]
             key = f"{asset}_{sec}"
@@ -127,7 +144,7 @@ for asset in desired_order:
                 method_init = sec_methods.get(key, "%")
                 current_val = row["Market Value (CAD)"]
                 if method_init == "%":
-                    default_val = row["Current %"] * 100  # show as percent
+                    default_val = row["Current %"] * 100
                 elif method_init == "$":
                     default_val = current_val
                 else:
@@ -206,6 +223,9 @@ for asset in desired_order:
 security_result_df = pd.concat(results)
 
 # === Display results ===
+# === Target Allocation Warning ===
+if grouped["Target %"].sum() > 100.5:
+    st.warning("⚠️ Total target allocation exceeds 100%. Please adjust your inputs.")
 st.subheader("📥 Asset Class Rebalancing Plan")
 asset_display_df = grouped.set_index("Asset Class").reindex(desired_order).dropna(how='all').reset_index()
 asset_display_df["Current $"] = asset_display_df["Current $"].apply(lambda x: f"${x:,.2f}")
@@ -234,6 +254,27 @@ for asset in desired_order:
                 "Buy/Sell $"
             ]]
             st.dataframe(display_securities_display.set_index("Security Name"), use_container_width=True)
+
+# === Allocation Pie Charts ===
+st.subheader("📊 Allocation Charts")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("<h5 style='text-align:center;'>Current Allocation</h5>", unsafe_allow_html=True)
+    current_values = grouped.set_index("Asset Class")["Current $"]
+    plt.figure(figsize=(4.5, 4.5))
+    plt.pie(current_values, labels=current_values.index, autopct="%1.1f%%", startangle=90, colors=["#c9b9a6", "#bfb7ae", "#a69e8c", "#d8d2ca"])
+    plt.axis("equal")
+    st.pyplot(plt.gcf())
+
+with col2:
+    st.markdown("<h5 style='text-align:center;'>Target Allocation</h5>", unsafe_allow_html=True)
+    target_values = grouped.set_index("Asset Class")["Target $"]
+    plt.figure(figsize=(4.5, 4.5))
+    plt.pie(target_values, labels=target_values.index, autopct="%1.1f%%", startangle=90, colors=["#c9b9a6", "#bfb7ae", "#a69e8c", "#d8d2ca"])
+    plt.axis("equal")
+    st.pyplot(plt.gcf())
 
 # === Summary Section ===
 st.subheader("📝 Summary")
