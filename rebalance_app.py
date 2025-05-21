@@ -1,3 +1,5 @@
+
+
 import pandas as pd
 import os
 import glob
@@ -6,7 +8,7 @@ import matplotlib.pyplot as plt
 import openpyxl
 
 # === CONFIG ===
-st.set_page_config(page_title="Portfolio Rebalancer", layout="centered")
+st.set_page_config(page_title="Portfolio Rebalancer", layout="wide")
 
 st.markdown("""
     <style>
@@ -25,27 +27,11 @@ st.markdown("""
             background-color: #dcd6cf;
             color: black;
         }
-        .control-row {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 0.5rem 0;
-        }
-        .lock-wrap {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            justify-content: flex-end;
-        }
-        .lock-icon {
-            font-size: 1rem;
-            color: #f41ef1;
-        }
         .block-label {
-            font-weight: 500;
-            font-size: 0.95rem;
-            text-transform: uppercase;
-            padding-top: 0.45rem;
+            font-weight: 600;
+            font-size: 1rem;
+            padding: 0.25rem 0;
+            text-align: center;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -53,18 +39,12 @@ st.markdown("""
 st.title("📊 Pierre's Portfolio Rebalancer")
 
 # === Load most recent file ===
-# === Upload Excel file ===
-uploaded_file = st.file_uploader("📤 Upload Excel File", type=["xlsx"])
-
-if uploaded_file is None:
-    st.warning("Please upload an Excel file to continue.")
+downloads_folder = os.path.expanduser("~/Downloads")
+excel_files = glob.glob(os.path.join(downloads_folder, "*.xlsx"))
+if not excel_files:
+    st.error("No Excel files found in Downloads.")
     st.stop()
-
-# Save temporarily for processing
-with open("uploaded_file.xlsx", "wb") as f:
-    f.write(uploaded_file.read())
-latest_file = "uploaded_file.xlsx"
-
+latest_file = max(excel_files, key=os.path.getctime)
 
 # === Extract client name from A3 ===
 wb = openpyxl.load_workbook(latest_file)
@@ -93,40 +73,59 @@ df = df[df["Quantity"].notna()]
 # === Define desired order ===
 desired_order = ["Cash & Cash Equivalents", "Bonds", "Canadian Equity", "Global Equity"]
 
-# === Group current totals ===
+# === Compute asset-class-level stats ===
 grouped = df.groupby("Asset Class")["Market Value (CAD)"].sum().reset_index()
 grouped.columns = ["Asset Class", "Current $"]
 total_value = grouped["Current $"].sum()
 grouped["Current %"] = grouped["Current $"] / total_value * 100
-grouped = grouped.round(2)
-grouped = grouped.set_index("Asset Class").reindex(desired_order).dropna(how='all').reset_index()
 
-# === User selects rebalancing method per class ===
-st.subheader("🎯 Allocation Inputs")
-st.markdown("<div style='text-align: center; font-size: 1.1rem; font-weight: 500;'>Adjust allocations and toggle locks as needed</div>", unsafe_allow_html=True)
+# === Security-level grouping ===
+security_df = df.groupby(["Asset Class", "Security Name"])["Market Value (CAD)"].sum().reset_index()
+security_df["Class Total"] = security_df.groupby("Asset Class")["Market Value (CAD)"].transform("sum")
+security_df["Current %"] = security_df["Market Value (CAD)"] / security_df["Class Total"]
+
+# === Asset Class Input UI ===
+sec_methods, sec_inputs, sec_locks = {}, {}, {}
+st.subheader("🎯 Asset Class Allocation Targets")
 methods, inputs, locks = {}, {}, {}
 
 for asset in desired_order:
     if asset not in grouped["Asset Class"].values:
         continue
-    cols = st.columns([1.2, 1.2, 2.2, 1.2], gap="medium")
-    with cols[0]:
-        st.markdown(f"<div class='block-label' style='text-align:center'>{asset.upper()}</div>", unsafe_allow_html=True)
-    with cols[1]:
-        methods[asset] = st.selectbox("", ["%", "$", "$ Δ"], key=f"method_{asset}")
-    with cols[2]:
-        inputs[asset] = st.number_input("", step=100.0 if methods[asset] != "%" else 0.1, key=f"val_{asset}")
-    with cols[3]:
-        st.markdown("<div class='lock-wrap' style='display: flex; align-items: center; justify-content: center;'>", unsafe_allow_html=True)
-        locks[asset] = st.toggle("", value=False, key=f"lock_{asset}")
-        st.markdown(f"<span class='lock-icon'>{'🔒' if locks[asset] else '🔓'}</span></div>", unsafe_allow_html=True)
 
-# === Convert all to target $ ===
+    col1, col2, col3, col4 = st.columns([2.5, 1.5, 2.5, 1])
+    with col1:
+        st.markdown(f"<div class='block-label'>{asset}</div>", unsafe_allow_html=True)
+    with col2:
+        methods[asset] = st.selectbox("", ["%", "$", "$ Δ"], key=f"method_{asset}")
+    with col3:
+        inputs[asset] = st.number_input("", step=100.0 if methods[asset] != "%" else 0.1, key=f"val_{asset}")
+    with col4:
+        locks[asset] = st.toggle("Lock", value=False, key=f"lock_{asset}")
+
+    asset_securities = security_df[security_df["Asset Class"] == asset]
+    with st.expander(f"🔽 Set Targets for Securities in {asset}"):
+        for _, row in asset_securities.iterrows():
+            sec = row["Security Name"]
+            key = f"{asset}_{sec}"
+            cols = st.columns([3, 1.5, 2.5, 1])
+            with cols[0]:
+                st.markdown(f"{sec} @ {row['Current %']:.2%}")
+            with cols[1]:
+                sec_methods[key] = st.selectbox("", ["%", "$", "$ Δ"], key=f"smethod_{key}")
+            with cols[2]:
+                sec_inputs[key] = st.number_input("", step=100.0 if sec_methods[key] != "%" else 0.1, key=f"sval_{key}")
+            with cols[3]:
+                sec_locks[key] = st.toggle("Lock", value=False, key=f"slock_{key}")
+
+# === Rebalancing logic ===
 target_dollars, locked_assets, unlocked_assets = {}, [], []
 for _, row in grouped.iterrows():
-    asset, current = row["Asset Class"], row["Current $"]
-    method, val, locked = methods[asset], inputs[asset], locks[asset]
-    if locked:
+    asset = row["Asset Class"]
+    current = row["Current $"]
+    method = methods[asset]
+    val = inputs[asset]
+    if locks[asset]:
         if method == "%":
             target_dollars[asset] = val / 100 * total_value
         elif method == "$":
@@ -138,69 +137,117 @@ for _, row in grouped.iterrows():
         unlocked_assets.append(asset)
 
 assigned = sum(target_dollars.values())
-remaining_value = total_value - assigned
+remaining = total_value - assigned
 if unlocked_assets:
-    even_value = remaining_value / len(unlocked_assets)
+    even = remaining / len(unlocked_assets)
     for asset in unlocked_assets:
-        target_dollars[asset] = even_value
+        target_dollars[asset] = even
 
-# === Final rebalancing plan ===
 grouped["Target $"] = grouped["Asset Class"].map(target_dollars)
 grouped["Target %"] = grouped["Target $"] / total_value * 100
 grouped["Buy/Sell $"] = grouped["Target $"] - grouped["Current $"]
-grouped = grouped.round(2)
 
-# === Display table ===
-st.subheader("📥 Rebalancing Plan")
-display_df = grouped.copy()
-for col in ["Current $", "Target $", "Buy/Sell $"]:
-    display_df[col] = display_df[col].apply(lambda x: f"${x:,.2f}")
-display_df["Current %"] = display_df["Current %"].apply(lambda x: f"{x:.2f}%")
-display_df["Target %"] = display_df["Target %"].apply(lambda x: f"{x:.2f}%")
-st.dataframe(display_df.set_index("Asset Class"), use_container_width=True)
+# === Compute security-level targets ===
+results = []
 
-# === Charts ===
-def plot_pie(values, labels, title):
-    pairs = [(v, l) for v, l in zip(values, labels) if pd.notnull(v)]
-    if not pairs:
-        st.warning(f"No data for {title} chart.")
-        return
-    values, labels = zip(*pairs)
-    fig, ax = plt.subplots()
-    ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90, textprops={'color': 'black'})
-    ax.axis('equal')
-    st.pyplot(fig)
+for asset in desired_order:
+    asset_securities = security_df[security_df["Asset Class"] == asset].copy()
+    asset_target = target_dollars.get(asset, 0)
+    locked_rows = []
+    unlocked_rows = []
 
-st.subheader("📊 Allocation Charts")
-col1, col2 = st.columns(2)
-with col1:
-    st.markdown("**Current**")
-    plot_pie(grouped["Current %"], grouped["Asset Class"], "Current")
-with col2:
-    st.markdown("**Target**")
-    plot_pie(grouped["Target %"], grouped["Asset Class"], "Target")
+    for _, row in asset_securities.iterrows():
+        sec = row["Security Name"]
+        key = f"{asset}_{sec}"
+        current = row["Market Value (CAD)"]
+        method = sec_methods.get(key, "%")
+        val = sec_inputs.get(key, 0)
+        if sec_locks.get(key, False):
+            if method == "%":
+                target = val / 100 * asset_target
+            elif method == "$":
+                target = val
+            elif method == "$ Δ":
+                target = current + val
+            locked_rows.append({**row, "Target $": target})
+        else:
+            unlocked_rows.append(row)
 
-# === Download file ===
-output_path = "rebalancing_plan.xlsx"
-grouped.to_excel(output_path, index=False)
-with open(output_path, "rb") as f:
-    st.download_button("⬇️ Download Excel", f, file_name="rebalancing_plan.xlsx")
+    locked_df = pd.DataFrame(locked_rows)
+    unlocked_df = pd.DataFrame(unlocked_rows)
+    locked_total = locked_df["Target $"] .sum() if not locked_df.empty else 0
 
-# === Summary ===
+    if not unlocked_df.empty:
+        subtotal = unlocked_df["Market Value (CAD)"].sum()
+        unlocked_df["Target $"] = (unlocked_df["Market Value (CAD)"] / subtotal) * (asset_target - locked_total)
+
+    final = pd.concat([locked_df, unlocked_df])
+    final["Buy/Sell $"] = final["Target $"] - final["Market Value (CAD)"]
+    results.append(final)
+
+security_result_df = pd.concat(results)
+
+# === Display results ===
+st.subheader("📥 Asset Class Rebalancing Plan")
+asset_display_df = grouped.set_index("Asset Class").reindex(desired_order).dropna(how='all').reset_index()
+asset_display_df["Current $"] = asset_display_df["Current $"].apply(lambda x: f"${x:,.2f}")
+asset_display_df["Target $"] = asset_display_df["Target $"].apply(lambda x: f"${x:,.2f}")
+asset_display_df["Buy/Sell $"] = asset_display_df["Buy/Sell $"].apply(lambda x: f"${x:,.2f}")
+asset_display_df["Current %"] = asset_display_df["Current %"].apply(lambda x: f"{x:.2f}%")
+asset_display_df["Target %"] = asset_display_df["Target %"].apply(lambda x: f"{x:.2f}%")
+st.dataframe(asset_display_df.set_index("Asset Class"), use_container_width=True)
+
+# === Security-Level Rebalancing Plan ===
+st.subheader("📌 Security-Level Rebalancing Plan")
+for asset in desired_order:
+    sec_subset = security_result_df[security_result_df["Asset Class"] == asset]
+    if not sec_subset.empty:
+        with st.expander(f"🔽 Securities in {asset}"):
+            display_securities = sec_subset.copy()
+            display_securities["Current % of Class"] = (display_securities["Market Value (CAD)"] / display_securities["Market Value (CAD)"].sum()) * 100
+            display_securities["Target % of Class"] = (display_securities["Target $"] / display_securities["Target $"] .sum()) * 100
+            display_securities = display_securities.round(2)
+            display_securities_display = display_securities[[
+                "Security Name",
+                "Market Value (CAD)",
+                "Current % of Class",
+                "Target $",
+                "Target % of Class",
+                "Buy/Sell $"
+            ]]
+            st.dataframe(display_securities_display.set_index("Security Name"), use_container_width=True)
+
+# === Summary Section ===
 st.subheader("📝 Summary")
+
 buys = grouped[grouped["Buy/Sell $"] > 0]
 sells = grouped[grouped["Buy/Sell $"] < 0]
-if buys.empty and sells.empty:
-    st.success("✅ No rebalancing needed.")
-else:
-    col1, col2 = st.columns(2)
-    with col1:
-        if not buys.empty:
-            st.markdown("### 🟢 Buy")
-            for _, row in buys.iterrows():
-                st.markdown(f"<span style='color:green;'>• **{row['Asset Class']}**: ${row['Buy/Sell $']:,.2f}</span>", unsafe_allow_html=True)
-    with col2:
-        if not sells.empty:
-            st.markdown("### 🔴 Sell")
-            for _, row in sells.iterrows():
-                st.markdown(f"<span style='color:red;'>• **{row['Asset Class']}**: ${abs(row['Buy/Sell $']):,.2f}</span>", unsafe_allow_html=True)
+col1, col2 = st.columns(2)
+with col1:
+    st.markdown("### 🟢 Buy (Asset Classes)")
+    for _, row in buys.iterrows():
+        st.markdown(f"• **{row['Asset Class']}**: ${row['Buy/Sell $']:,.2f}")
+with col2:
+    st.markdown("### 🔴 Sell (Asset Classes)")
+    for _, row in sells.iterrows():
+        st.markdown(f"• **{row['Asset Class']}**: ${abs(row['Buy/Sell $']):,.2f}")
+
+sec_buys = security_result_df[security_result_df["Buy/Sell $"] > 0]
+sec_sells = security_result_df[security_result_df["Buy/Sell $"] < 0]
+col1, col2 = st.columns(2)
+with col1:
+    st.markdown("### 🟢 Buy (Securities)")
+    for _, row in sec_buys.iterrows():
+        st.markdown(f"• **{row['Security Name']} ({row['Asset Class']})**: ${row['Buy/Sell $']:,.2f}")
+with col2:
+    st.markdown("### 🔴 Sell (Securities)")
+    for _, row in sec_sells.iterrows():
+        st.markdown(f"• **{row['Security Name']} ({row['Asset Class']})**: ${abs(row['Buy/Sell $']):,.2f}")
+
+# === Download File ===
+output_path = os.path.join(downloads_folder, "rebalancing_plan.xlsx")
+with pd.ExcelWriter(output_path) as writer:
+    grouped.to_excel(writer, sheet_name="Asset Class", index=False)
+    security_result_df.to_excel(writer, sheet_name="Securities", index=False)
+with open(output_path, "rb") as f:
+    st.download_button("⬇️ Download Excel", f, file_name="rebalancing_plan.xlsx")
