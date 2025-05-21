@@ -1,5 +1,3 @@
-
-
 import pandas as pd
 import os
 import glob
@@ -132,7 +130,17 @@ for asset in desired_order:
                     default_val = current_val
                 else:
                     default_val = 0.0
-                sec_inputs[key] = st.number_input("", value=default_val, step=100.0 if method_init != "%" else 0.1, key=f"sval_{key}")
+                cols_inner = st.columns([5, 1])
+                with cols_inner[0]:
+                    sec_inputs[key] = st.number_input("", value=default_val, step=100.0 if method_init != "%" else 0.1, key=f"sval_{key}")
+                with cols_inner[1]:
+                    if st.button("↺", key=f"reset_{key}"):
+                        if method_init == "%":
+                            sec_inputs[key] = row["Current %"] * 100
+                        elif method_init == "$":
+                            sec_inputs[key] = current_val
+                        else:
+                            sec_inputs[key] = 0.0
             with cols[3]:
                 sec_locks[key] = st.toggle("Lock", value=False, key=f"slock_{key}")
 
