@@ -132,7 +132,27 @@ for asset in desired_order:
                     default_val = 0.0
                 cols_inner = st.columns([5, 1])
                 with cols_inner[0]:
-                    sec_inputs[key] = st.number_input("", value=default_val, step=100.0 if method_init != "%" else 0.1, key=f"sval_{key}")
+                    reset_key = f"reset_{key}"
+                    reset = st.session_state.get(reset_key, False)
+                    if reset:
+                        if method_init == "%":
+                            default_val = row["Current %"] * 100
+                        elif method_init == "$":
+                            default_val = current_val
+                        else:
+                            default_val = 0.0
+                        st.session_state[reset_key] = False
+                    input_container = st.container()
+                    sec_inputs[key] = input_container.number_input(
+                        label="",
+                        value=default_val,
+                        step=100.0 if method_init != "%" else 0.1,
+                        key=f"sval_{key}"
+                    )
+                    input_container.markdown(
+                        f"<button onclick=\"window.location.reload()\" style='position:absolute; margin-left:-30px; margin-top:-36px; font-size:0.7rem;'>↺</button>",
+                        unsafe_allow_html=True
+                    )
                 with cols_inner[1]:
                     if st.button("↺", key=f"reset_{key}"):
                         if method_init == "%":
